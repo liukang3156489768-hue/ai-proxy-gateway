@@ -450,15 +450,23 @@ router.post(["/proxy/v1/messages", "/messages"], proxyAuth, async (req: Request,
       ) as TextBlockParam[];
     })();
 
-    const thinkingParam = thinking.enabled
-      ? { thinking: { type: "enabled" as const, budget_tokens: body.max_tokens ? Math.floor(body.max_tokens * 0.5) : 8000 } }
+    const isOpus47 = model === "claude-opus-4-7";
+    const requestedMaxTokens = body.max_tokens ?? 30000;
+    const desiredBudget = Math.max(1024, Math.floor(requestedMaxTokens * 0.5));
+    const effectiveMaxTokens = thinking.enabled && !isOpus47
+      ? Math.max(requestedMaxTokens, desiredBudget + 1024)
+      : requestedMaxTokens;
+    const budgetTokens = Math.min(desiredBudget, effectiveMaxTokens - 1);
+
+    const thinkingParam = thinking.enabled && !isOpus47
+      ? { thinking: { type: "enabled" as const, budget_tokens: budgetTokens } }
       : {};
 
     const baseParams = {
       model,
-      max_tokens: body.max_tokens ?? 30000,
+      max_tokens: effectiveMaxTokens,
       messages: body.messages,
-      ...(body.temperature !== undefined ? { temperature: body.temperature } : {}),
+      ...(body.temperature !== undefined && !isOpus47 ? { temperature: body.temperature } : {}),
       ...(systemContent ? { system: systemContent } : {}),
       ...(body.tools ? { tools: body.tools } : {}),
       ...thinkingParam,
@@ -650,15 +658,27 @@ async function handleAnthropic({ req: _req, res, body, model, stream, thinking }
   const maxTokens = body.max_completion_tokens ?? body.max_tokens ?? 30000;
   const completionId = `cmpl-anthropic-${Date.now()}`;
 
-  const thinkingParam = thinking.enabled
-    ? { thinking: { type: "enabled" as const, budget_tokens: Math.floor(maxTokens * 0.5) } }
+  // claude-opus-4-7: doesn't support temperature/top_p, and uses adaptive thinking (no budget_tokens)
+  const isOpus47 = model === "claude-opus-4-7";
+
+  // budget_tokens must be >= 1024 and < max_tokens (Anthropic constraints)
+  const desiredBudget = Math.max(1024, Math.floor(maxTokens * 0.5));
+  const effectiveMaxTokens = thinking.enabled && !isOpus47
+    ? Math.max(maxTokens, desiredBudget + 1024)
+    : maxTokens;
+  const budgetTokens = Math.min(desiredBudget, effectiveMaxTokens - 1);
+
+  // For claude-opus-4-7, thinking can't be controlled via budget_tokens — model emits thinking blocks naturally.
+  // We omit the thinking param entirely; the user still gets reasoning via thinking blocks (filtered unless visible).
+  const thinkingParam = thinking.enabled && !isOpus47
+    ? { thinking: { type: "enabled" as const, budget_tokens: budgetTokens } }
     : {};
 
   const baseParams = {
     model,
-    max_tokens: maxTokens,
+    max_tokens: effectiveMaxTokens,
     messages: chatMessages,
-    ...(body.temperature !== undefined ? { temperature: body.temperature } : {}),
+    ...(body.temperature !== undefined && !isOpus47 ? { temperature: body.temperature } : {}),
     ...(anthropicSystem ? { system: anthropicSystem } : {}),
     ...(body.tools ? { tools: toAnthropicTools(body.tools) } : {}),
     ...thinkingParam,

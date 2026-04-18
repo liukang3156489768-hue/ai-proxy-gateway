@@ -57,3 +57,9 @@
 - `GET /api/healthz` — 健康检查
 - `GET /api/stats` — 请求统计
 - `GET /api/keys` — 密钥管理
+
+## 已知问题修复记录
+
+- **2026-04-18**: 修复 Anthropic 思考模式（thinking）调用失败问题
+  - `claude-opus-4-5/4-6/4-1/sonnet/haiku` 思考变体：`budget_tokens` 强制 ≥ 1024 且小于 `max_tokens`
+  - `claude-opus-4-7`：不支持 `temperature`/`top_p`/`top_k` 参数及显式 `budget_tokens`，自动剥离这些字段
