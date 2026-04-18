@@ -172,6 +172,52 @@ router.get("/stats/models", (_req, res) => {
   res.json(SUPPORTED_MODELS);
 });
 
+// Per-client (per-API-key) usage statistics. Joins on api_keys to resolve the
+// human-readable name. Falls back to the masked key prefix if no name is found.
+router.get("/stats/usage-by-client", async (_req, res) => {
+  const result = await db.execute(sql`
+    SELECT
+      l.client_key,
+      coalesce(k.name, '未命名 (' || substr(l.client_key, 1, 8) || '…)') AS client_name,
+      count(*)::int                                                       AS request_count,
+      count(*) filter (where l.status >= 400)::int                       AS error_count,
+      coalesce(sum(l.prompt_tokens), 0)::int                              AS input_tokens,
+      coalesce(sum(l.completion_tokens), 0)::int                          AS output_tokens,
+      coalesce(sum(l.total_tokens), 0)::int                               AS total_tokens,
+      coalesce(sum(l.cost_usd), 0)::float                                 AS total_cost_usd,
+      coalesce(avg(l.latency_ms), 0)::float                               AS avg_latency_ms,
+      max(l.created_at)                                                   AS last_used_at
+    FROM api_usage_logs l
+    LEFT JOIN api_keys k ON k.name = l.client_key
+    GROUP BY l.client_key, k.name
+    ORDER BY request_count DESC
+  `);
+
+  const rows = Array.isArray(result) ? result : (result as { rows?: unknown[] }).rows ?? [];
+  res.json(
+    (rows as Array<{
+      client_key: string; client_name: string;
+      request_count: number; error_count: number;
+      input_tokens: number; output_tokens: number; total_tokens: number;
+      total_cost_usd: number; avg_latency_ms: number;
+      last_used_at: Date | string | null;
+    }>).map((r) => ({
+      clientKey: r.client_key,
+      clientName: r.client_name,
+      requestCount: Number(r.request_count),
+      errorCount: Number(r.error_count),
+      inputTokens: Number(r.input_tokens),
+      outputTokens: Number(r.output_tokens),
+      totalTokens: Number(r.total_tokens),
+      totalCostUsd: Number(r.total_cost_usd),
+      avgLatencyMs: Number(r.avg_latency_ms),
+      lastUsedAt: r.last_used_at instanceof Date
+        ? r.last_used_at.toISOString()
+        : (r.last_used_at ? String(r.last_used_at) : null),
+    }))
+  );
+});
+
 function maskKey(key: string): string {
   if (key.length <= 8) return "****";
   return key.slice(0, 4) + "****" + key.slice(-4);

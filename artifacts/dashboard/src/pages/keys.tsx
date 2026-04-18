@@ -6,6 +6,7 @@ interface ApiKeyRecord {
   id: number;
   name: string;
   keyPrefix: string;
+  key?: string | null;
   createdAt: string;
   lastUsedAt: string | null;
   isActive: boolean;
@@ -30,6 +31,60 @@ function CopyInline({ text }: { text: string }) {
       {copied ? <Check className="w-2.5 h-2.5" /> : <Copy className="w-2.5 h-2.5" />}
       {copied ? "已复制" : "复制"}
     </button>
+  );
+}
+
+function KeyCell({ k }: { k: ApiKeyRecord }) {
+  const [visible, setVisible] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const fullKey = k.key ?? null;
+
+  const copyFull = async () => {
+    if (!fullKey) return;
+    await navigator.clipboard.writeText(fullKey).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  if (!fullKey) {
+    return (
+      <div className="flex items-center gap-2">
+        <code className="font-mono text-violet-300 bg-[#0d1117] border border-[#1e2d3d] rounded px-2 py-0.5">
+          {k.keyPrefix}
+        </code>
+        <span className="text-[10px] text-amber-400/80" title="此密钥在升级前创建，仅存哈希，无法找回完整内容">
+          仅哈希
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <code
+        className={`font-mono text-violet-300 bg-[#0d1117] border border-[#1e2d3d] rounded px-2 py-0.5 max-w-[260px] truncate ${!visible ? "select-none" : ""}`}
+        title={visible ? fullKey : undefined}
+      >
+        {visible ? fullKey : k.keyPrefix}
+      </code>
+      <button
+        onClick={() => setVisible(!visible)}
+        className="text-slate-500 hover:text-slate-200 transition-colors"
+        title={visible ? "隐藏" : "查看完整密钥"}
+        data-testid={`button-toggle-key-${k.id}`}
+      >
+        {visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+      </button>
+      <button
+        onClick={copyFull}
+        className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono transition-all ${copied ? "bg-emerald-500/20 text-emerald-400" : "bg-[#1e2d3d] text-slate-400 hover:text-slate-200"}`}
+        title="复制完整密钥"
+        data-testid={`button-copy-full-key-${k.id}`}
+      >
+        {copied ? <Check className="w-2.5 h-2.5" /> : <Copy className="w-2.5 h-2.5" />}
+        {copied ? "已复制" : "复制完整"}
+      </button>
+    </div>
   );
 }
 
@@ -343,12 +398,7 @@ export default function Keys() {
                 >
                   <td className="px-4 py-3 font-medium text-slate-200">{k.name}</td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <code className="font-mono text-violet-300 bg-[#0d1117] border border-[#1e2d3d] rounded px-2 py-0.5">
-                        {k.keyPrefix}
-                      </code>
-                      <CopyInline text={k.keyPrefix} />
-                    </div>
+                    <KeyCell k={k} />
                   </td>
                   <td className="px-4 py-3 font-mono text-slate-400">{formatDate(k.createdAt)}</td>
                   <td className="px-4 py-3 font-mono text-slate-400">{formatDate(k.lastUsedAt)}</td>

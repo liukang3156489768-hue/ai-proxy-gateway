@@ -8,7 +8,6 @@ import Home from "@/pages/home";
 import Stats from "@/pages/stats";
 import Logs from "@/pages/logs";
 import Models from "@/pages/models";
-import Monitor from "@/pages/monitor";
 import Settings from "@/pages/settings";
 import Keys from "@/pages/keys";
 import Deploy from "@/pages/deploy";
@@ -29,7 +28,6 @@ function Router() {
       <Switch>
         <Route path="/" component={Home} />
         <Route path="/stats" component={Stats} />
-        <Route path="/monitor" component={Monitor} />
         <Route path="/models" component={Models} />
         <Route path="/settings" component={Settings} />
         <Route path="/keys" component={Keys} />

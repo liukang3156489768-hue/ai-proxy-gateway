@@ -1,9 +1,22 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useGetStatsSummary, getGetStatsSummaryQueryKey,
   useGetStatsUsageByProvider, getGetStatsUsageByProviderQueryKey,
   useGetStatsUsageOverTime, getGetStatsUsageOverTimeQueryKey,
 } from "@workspace/api-client-react";
+
+interface ClientUsage {
+  clientKey: string;
+  clientName: string;
+  requestCount: number;
+  errorCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  totalCostUsd: number;
+  avgLatencyMs: number;
+  lastUsedAt: string | null;
+}
 import { formatK, formatCostShort, formatLatency, formatLatencyMs, formatNumber } from "@/lib/format";
 import { RefreshCw, RotateCcw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -76,7 +89,18 @@ export default function Stats() {
   const { data: byProvider } = useGetStatsUsageByProvider({ query: { queryKey: getGetStatsUsageByProviderQueryKey() } });
   const { data: overTime } = useGetStatsUsageOverTime({ query: { queryKey: getGetStatsUsageOverTimeQueryKey() } });
 
+  const [byClient, setByClient] = useState<ClientUsage[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${window.location.origin}/api/stats/usage-by-client`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: ClientUsage[]) => { if (!cancelled) setByClient(data); })
+      .catch(() => { if (!cancelled) setByClient([]); });
+    return () => { cancelled = true; };
+  }, [lastRefresh]);
+
   const totalCalls = byProvider?.reduce((s, p) => s + p.requestCount, 0) ?? 0;
+  const totalClientCalls = byClient.reduce((s, c) => s + c.requestCount, 0);
 
   const handleRefresh = () => {
     qc.invalidateQueries();
@@ -278,6 +302,54 @@ export default function Stats() {
           </div>
         </div>
       )}
+
+      <div className="rounded-lg border border-[#1e2d3d] bg-[#111827] overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-[#1e2d3d]">
+          <span className="text-base">👥</span>
+          <span className="text-sm font-medium text-white">按客户端密钥统计消耗</span>
+          <span className="ml-auto text-xs text-slate-500 font-mono">{byClient.length} 个客户端 · 共 {totalClientCalls} 次</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-[#1e2d3d]">
+                {["密钥名称", "请求", "错误", "输入 TOKEN", "输出 TOKEN", "总 TOKEN", "预估开销", "平均耗时", "最近使用"].map((h) => (
+                  <th key={h} className="px-4 py-2.5 text-left text-slate-500 font-medium whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {byClient.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-4 py-6 text-center text-slate-500">暂无客户端调用数据</td>
+                </tr>
+              ) : (
+                byClient.map((c) => (
+                  <tr
+                    key={c.clientKey}
+                    className="border-b border-[#1e2d3d]/50 last:border-0 hover:bg-white/[0.02]"
+                    data-testid={`client-row-${c.clientKey.slice(0, 8)}`}
+                  >
+                    <td className="px-4 py-3">
+                      <span className="text-slate-200 font-medium">{c.clientName}</span>
+                    </td>
+                    <td className="px-4 py-3 font-mono font-bold text-white">{c.requestCount}</td>
+                    <td className={`px-4 py-3 font-mono ${c.errorCount > 0 ? "text-red-400" : "text-slate-400"}`}>{c.errorCount}</td>
+                    <td className="px-4 py-3 font-mono text-amber-400">{formatK(c.inputTokens)}</td>
+                    <td className="px-4 py-3 font-mono text-orange-400">{formatK(c.outputTokens)}</td>
+                    <td className="px-4 py-3 font-mono text-slate-300">{formatK(c.totalTokens)}</td>
+                    <td className="px-4 py-3 font-mono text-red-400">{formatCostShort(c.totalCostUsd)}</td>
+                    <td className="px-4 py-3 font-mono text-slate-300">{formatLatencyMs(c.avgLatencyMs)}</td>
+                    <td className="px-4 py-3 font-mono text-slate-500">
+                      {c.lastUsedAt ? new Date(c.lastUsedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "-"}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <div className="rounded-lg border border-[#1e2d3d] bg-[#111827] overflow-hidden">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-[#1e2d3d]">

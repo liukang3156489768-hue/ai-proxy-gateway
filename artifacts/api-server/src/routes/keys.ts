@@ -44,11 +44,12 @@ function generateKey(): { key: string; keyHash: string; keyPrefix: string } {
   };
 }
 
-function formatKey(k: typeof apiKeys.$inferSelect) {
+function formatKey(k: typeof apiKeys.$inferSelect, includePlain = false) {
   return {
     id: k.id,
     name: k.name,
     keyPrefix: k.keyPrefix,
+    ...(includePlain ? { key: k.keyPlain ?? null } : {}),
     createdAt: k.createdAt.toISOString(),
     lastUsedAt: k.lastUsedAt?.toISOString() ?? null,
     isActive: k.isActive,
@@ -59,7 +60,9 @@ function formatKey(k: typeof apiKeys.$inferSelect) {
 
 router.get("/keys", adminAuth, async (_req, res) => {
   const rows = await db.select().from(apiKeys).orderBy(desc(apiKeys.createdAt));
-  res.json(rows.map(formatKey));
+  // Include the full plaintext key (admin-authenticated endpoint), so the dashboard
+  // can support "view forgotten key" + "copy full key" features.
+  res.json(rows.map((r) => formatKey(r, true)));
 });
 
 router.post("/keys", adminAuth, async (req, res) => {
@@ -72,10 +75,10 @@ router.post("/keys", adminAuth, async (req, res) => {
   const { key, keyHash, keyPrefix } = generateKey();
   const [inserted] = await db
     .insert(apiKeys)
-    .values({ name, keyHash, keyPrefix })
+    .values({ name, keyHash, keyPrefix, keyPlain: key })
     .returning();
 
-  res.status(201).json({ ...formatKey(inserted!), key });
+  res.status(201).json({ ...formatKey(inserted!, true), key });
 });
 
 router.patch("/keys/:id/toggle", adminAuth, async (req, res) => {
