@@ -620,6 +620,14 @@ async function handleGemini({ req: _req, res, body, model, stream, thinking }: {
     });
 
     let pt = 0; let ct = 0;
+    let sawToolCall = false;
+
+    // Initial role chunk (required by strict OpenAI-compatible clients)
+    res.write(`data: ${JSON.stringify({
+      id: completionId, object: "chat.completion.chunk", model,
+      choices: [{ index: 0, delta: { role: "assistant", content: "" }, finish_reason: null }],
+    })}\n\n`);
+
     for await (const chunk of streamResp) {
       const text = chunk.text;
       if (text) {
@@ -631,6 +639,7 @@ async function handleGemini({ req: _req, res, body, model, stream, thinking }: {
       // Function call chunks
       const fnCall = chunk.candidates?.[0]?.content?.parts?.find((p: { functionCall?: unknown }) => p.functionCall);
       if (fnCall) {
+        sawToolCall = true;
         const fc = (fnCall as { functionCall: { name: string; args: unknown } }).functionCall;
         res.write(`data: ${JSON.stringify({
           id: completionId, object: "chat.completion.chunk", model,
@@ -639,6 +648,13 @@ async function handleGemini({ req: _req, res, body, model, stream, thinking }: {
       }
       if (chunk.usageMetadata) { pt = chunk.usageMetadata.promptTokenCount ?? 0; ct = chunk.usageMetadata.candidatesTokenCount ?? 0; }
     }
+
+    // Final chunk with finish_reason (required by strict OpenAI-compatible clients)
+    res.write(`data: ${JSON.stringify({
+      id: completionId, object: "chat.completion.chunk", model,
+      choices: [{ index: 0, delta: {}, finish_reason: sawToolCall ? "tool_calls" : "stop" }],
+    })}\n\n`);
+
     res._proxyUsage = { prompt: pt, completion: ct };
     res.write("data: [DONE]\n\n");
     res.end();
@@ -729,6 +745,13 @@ async function handleAnthropic({ req: _req, res, body, model, stream, thinking }
     const streamResp = anthropic.messages.stream(baseParams);
     let pt = 0; let ct = 0;
     let skipThinkingBlock = false;
+    let finishReason: string = "stop";
+
+    // Initial role chunk (required by strict OpenAI-compatible clients)
+    res.write(`data: ${JSON.stringify({
+      id: completionId, object: "chat.completion.chunk", model,
+      choices: [{ index: 0, delta: { role: "assistant", content: "" }, finish_reason: null }],
+    })}\n\n`);
 
     for await (const event of streamResp) {
       if (event.type === "content_block_start") {
@@ -745,10 +768,15 @@ async function handleAnthropic({ req: _req, res, body, model, stream, thinking }
       }
       if (event.type === "message_start" && event.message.usage) pt = event.message.usage.input_tokens;
       if (event.type === "message_delta" && event.usage) ct = event.usage.output_tokens;
+      if (event.type === "message_delta" && event.delta.stop_reason) {
+        const sr = event.delta.stop_reason;
+        finishReason = sr === "end_turn" ? "stop" : sr === "max_tokens" ? "length" : sr === "tool_use" ? "tool_calls" : "stop";
+      }
     }
 
     // Handle tool_use blocks from the final message
     const finalMsg = await streamResp.finalMessage().catch(() => null);
+    let emittedToolCallFinish = false;
     if (finalMsg) {
       const toolUseBlocks = finalMsg.content.filter((b) => b.type === "tool_use") as ToolUseBlock[];
       if (toolUseBlocks.length > 0) {
@@ -760,7 +788,16 @@ async function handleAnthropic({ req: _req, res, body, model, stream, thinking }
           id: completionId, object: "chat.completion.chunk", model,
           choices: [{ index: 0, delta: { tool_calls }, finish_reason: "tool_calls" }],
         })}\n\n`);
+        emittedToolCallFinish = true;
       }
+    }
+
+    // Final chunk with finish_reason (required by strict OpenAI-compatible clients)
+    if (!emittedToolCallFinish) {
+      res.write(`data: ${JSON.stringify({
+        id: completionId, object: "chat.completion.chunk", model,
+        choices: [{ index: 0, delta: {}, finish_reason: finishReason }],
+      })}\n\n`);
     }
 
     res._proxyUsage = { prompt: pt, completion: ct };
