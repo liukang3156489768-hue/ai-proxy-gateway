@@ -346,6 +346,7 @@ router.post(["/proxy/v1/chat/completions", "/chat/completions"], proxyAuth, asyn
   }
 
   if (!isModelSupported(rawBody.model)) {
+    req.log.warn({ clientKey, requestedModel: rawBody.model, stream }, "rejected unsupported model");
     res.status(404).json({
       error: {
         message: `Model '${rawBody.model}' is not supported. Call GET /v1/models for the list of available models.`,
