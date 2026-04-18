@@ -1,6 +1,24 @@
 import { Router, type IRouter, Request, Response } from "express";
 import { proxyAuth } from "../middlewares/proxyAuth.js";
 import { detectProvider, estimateCost, SUPPORTED_MODELS } from "../lib/providers.js";
+
+const SUPPORTED_MODEL_IDS = new Set((SUPPORTED_MODELS as { id: string }[]).map((m) => m.id));
+
+function isModelSupported(model: string): boolean {
+  const base = model.replace(/-thinking-visible$/, "").replace(/-thinking$/, "");
+  return SUPPORTED_MODEL_IDS.has(base) || SUPPORTED_MODEL_IDS.has(model);
+}
+
+function extractUpstreamError(err: unknown): { status: number; message: string; type: string } {
+  if (err && typeof err === "object") {
+    const e = err as { status?: number; error?: { error?: { message?: string; type?: string } }; message?: string };
+    const status = typeof e.status === "number" ? e.status : 500;
+    const upstreamMsg = e.error?.error?.message ?? e.message ?? "Unknown error";
+    const upstreamType = e.error?.error?.type ?? "upstream_error";
+    return { status, message: upstreamMsg, type: upstreamType };
+  }
+  return { status: 500, message: String(err), type: "proxy_error" };
+}
 import { db, apiUsageLogs } from "@workspace/db";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { ai } from "@workspace/integrations-gemini-ai";
@@ -327,6 +345,17 @@ router.post(["/proxy/v1/chat/completions", "/chat/completions"], proxyAuth, asyn
     return;
   }
 
+  if (!isModelSupported(rawBody.model)) {
+    res.status(404).json({
+      error: {
+        message: `Model '${rawBody.model}' is not supported. Call GET /v1/models for the list of available models.`,
+        type: "model_not_found",
+        code: "model_not_found",
+      },
+    });
+    return;
+  }
+
   const provider = detectProvider(model);
   const startTime = Date.now();
   const requestPath = "/proxy/v1/chat/completions";
@@ -354,11 +383,14 @@ router.post(["/proxy/v1/chat/completions", "/chat/completions"], proxyAuth, asyn
     req.log.info({ clientKey, model, provider, latencyMs, promptTokens, completionTokens }, "proxy chat complete");
   } catch (err) {
     const latencyMs = Date.now() - startTime;
-    status = 500;
-    errorMessage = err instanceof Error ? err.message : String(err);
-    req.log.error({ err, model, provider }, "proxy chat error");
+    const upstream = extractUpstreamError(err);
+    status = upstream.status;
+    errorMessage = upstream.message;
+    req.log.error({ err, model, provider, upstreamStatus: upstream.status, upstreamMessage: upstream.message }, "proxy chat error");
     if (!res.headersSent) {
-      res.status(500).json({ error: { message: "Internal proxy error", type: "proxy_error" } });
+      res.status(upstream.status).json({
+        error: { message: upstream.message, type: upstream.type, code: upstream.status },
+      });
     }
     await logUsage({ clientKey, provider, model, promptTokens: 0, completionTokens: 0, latencyMs, status, isStream: stream, requestPath, errorMessage });
   }
@@ -429,9 +461,13 @@ router.post(["/proxy/v1/messages", "/messages"], proxyAuth, async (req: Request,
       const usage = (res as ProxyRes)._proxyUsage;
       if (usage) { promptTokens = usage.prompt; completionTokens = usage.completion; }
     } catch (err) {
-      status = 500;
-      errorMessage = err instanceof Error ? err.message : String(err);
-      if (!res.headersSent) res.status(500).json({ error: { message: "Internal proxy error" } });
+      const upstream = extractUpstreamError(err);
+      status = upstream.status;
+      errorMessage = upstream.message;
+      req.log.error({ err, model, provider, upstreamStatus: upstream.status, upstreamMessage: upstream.message }, "proxy messages error");
+      if (!res.headersSent) {
+        res.status(upstream.status).json({ error: { message: upstream.message, type: upstream.type, code: upstream.status } });
+      }
     }
 
     await logUsage({ clientKey, provider, model, promptTokens, completionTokens, latencyMs: Date.now() - startTime, status, isStream: stream, requestPath, errorMessage });
