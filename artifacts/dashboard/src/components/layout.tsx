@@ -16,7 +16,7 @@ const navItems = [
 ];
 
 const BUILD_DATE = "2026-04-18";
-const VERSION = "v1.0.1";
+const VERSION = "v1.0.2";
 
 interface VersionCheckResult {
   ok: boolean;
