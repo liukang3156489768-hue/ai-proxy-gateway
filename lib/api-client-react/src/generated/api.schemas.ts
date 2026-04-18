@@ -8,3 +8,82 @@
 export interface HealthStatus {
   status: string;
 }
+
+export interface StatsSummary {
+  totalRequests: number;
+  totalTokens: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCostUsd: number;
+  avgLatencyMs: number;
+  successRate: number;
+  successCount: number;
+  failureCount: number;
+  streamRequests: number;
+  requestsLast24h: number;
+  tokensLast24h: number;
+  costLast24h: number;
+}
+
+export interface StatsRequest {
+  id: number;
+  createdAt: string;
+  clientKey: string;
+  provider: string;
+  model: string;
+  promptTokens?: number | null;
+  completionTokens?: number | null;
+  totalTokens?: number | null;
+  latencyMs?: number | null;
+  costUsd?: number | null;
+  status: number;
+  isStream?: boolean | null;
+  requestPath: string;
+  errorMessage?: string | null;
+}
+
+export interface StatsRequestsResponse {
+  requests: StatsRequest[];
+  total: number;
+}
+
+export interface ModelUsageStat {
+  model: string;
+  provider: string;
+  requestCount: number;
+  totalTokens: number;
+  totalCostUsd: number;
+  avgLatencyMs: number;
+}
+
+export interface ProviderUsageStat {
+  provider: string;
+  requestCount: number;
+  streamCount: number;
+  errorCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalCostUsd: number;
+  avgLatencyMs: number;
+}
+
+export interface TimeSeriesStat {
+  hour: string;
+  requestCount: number;
+  totalTokens: number;
+  totalCostUsd: number;
+}
+
+export interface SupportedModel {
+  id: string;
+  name: string;
+  provider: string;
+  description: string;
+  inputCostPer1M: number;
+  outputCostPer1M: number;
+}
+
+export type GetStatsRequestsParams = {
+  limit?: number;
+  offset?: number;
+};

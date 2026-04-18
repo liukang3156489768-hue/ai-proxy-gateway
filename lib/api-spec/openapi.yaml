@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: stats
+    description: Usage statistics
 paths:
   /healthz:
     get:
@@ -24,6 +26,104 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /stats/summary:
+    get:
+      operationId: getStatsSummary
+      tags: [stats]
+      summary: Get usage summary
+      responses:
+        "200":
+          description: Usage summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatsSummary"
+
+  /stats/requests:
+    get:
+      operationId: getStatsRequests
+      tags: [stats]
+      summary: Get recent requests
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Recent requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatsRequestsResponse"
+
+  /stats/usage-by-model:
+    get:
+      operationId: getStatsUsageByModel
+      tags: [stats]
+      summary: Get usage grouped by model
+      responses:
+        "200":
+          description: Usage by model
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ModelUsageStat"
+
+  /stats/usage-by-provider:
+    get:
+      operationId: getStatsUsageByProvider
+      tags: [stats]
+      summary: Get usage grouped by provider
+      responses:
+        "200":
+          description: Usage by provider
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProviderUsageStat"
+
+  /stats/usage-over-time:
+    get:
+      operationId: getStatsUsageOverTime
+      tags: [stats]
+      summary: Get usage over time (hourly for last 24h)
+      responses:
+        "200":
+          description: Usage over time
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimeSeriesStat"
+
+  /stats/models:
+    get:
+      operationId: getSupportedModels
+      tags: [stats]
+      summary: Get list of supported models
+      responses:
+        "200":
+          description: Supported models
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SupportedModel"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +134,198 @@ components:
       required:
         - status
 
+    StatsSummary:
+      type: object
+      properties:
+        totalRequests:
+          type: integer
+        totalTokens:
+          type: integer
+        totalInputTokens:
+          type: integer
+        totalOutputTokens:
+          type: integer
+        totalCostUsd:
+          type: number
+        avgLatencyMs:
+          type: number
+        successRate:
+          type: number
+        successCount:
+          type: integer
+        failureCount:
+          type: integer
+        streamRequests:
+          type: integer
+        requestsLast24h:
+          type: integer
+        tokensLast24h:
+          type: integer
+        costLast24h:
+          type: number
+      required:
+        - totalRequests
+        - totalTokens
+        - totalInputTokens
+        - totalOutputTokens
+        - totalCostUsd
+        - avgLatencyMs
+        - successRate
+        - successCount
+        - failureCount
+        - streamRequests
+        - requestsLast24h
+        - tokensLast24h
+        - costLast24h
+
+    StatsRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+        createdAt:
+          type: string
+        clientKey:
+          type: string
+        provider:
+          type: string
+        model:
+          type: string
+        promptTokens:
+          type: integer
+          nullable: true
+        completionTokens:
+          type: integer
+          nullable: true
+        totalTokens:
+          type: integer
+          nullable: true
+        latencyMs:
+          type: integer
+          nullable: true
+        costUsd:
+          type: number
+          nullable: true
+        status:
+          type: integer
+        isStream:
+          type: boolean
+          nullable: true
+        requestPath:
+          type: string
+        errorMessage:
+          type: string
+          nullable: true
+      required:
+        - id
+        - createdAt
+        - clientKey
+        - provider
+        - model
+        - status
+        - requestPath
+
+    StatsRequestsResponse:
+      type: object
+      properties:
+        requests:
+          type: array
+          items:
+            $ref: "#/components/schemas/StatsRequest"
+        total:
+          type: integer
+      required:
+        - requests
+        - total
+
+    ModelUsageStat:
+      type: object
+      properties:
+        model:
+          type: string
+        provider:
+          type: string
+        requestCount:
+          type: integer
+        totalTokens:
+          type: integer
+        totalCostUsd:
+          type: number
+        avgLatencyMs:
+          type: number
+      required:
+        - model
+        - provider
+        - requestCount
+        - totalTokens
+        - totalCostUsd
+        - avgLatencyMs
+
+    ProviderUsageStat:
+      type: object
+      properties:
+        provider:
+          type: string
+        requestCount:
+          type: integer
+        streamCount:
+          type: integer
+        errorCount:
+          type: integer
+        inputTokens:
+          type: integer
+        outputTokens:
+          type: integer
+        totalCostUsd:
+          type: number
+        avgLatencyMs:
+          type: number
+      required:
+        - provider
+        - requestCount
+        - streamCount
+        - errorCount
+        - inputTokens
+        - outputTokens
+        - totalCostUsd
+        - avgLatencyMs
+
+    TimeSeriesStat:
+      type: object
+      properties:
+        hour:
+          type: string
+        requestCount:
+          type: integer
+        totalTokens:
+          type: integer
+        totalCostUsd:
+          type: number
+      required:
+        - hour
+        - requestCount
+        - totalTokens
+        - totalCostUsd
+
+    SupportedModel:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        provider:
+          type: string
+        description:
+          type: string
+        inputCostPer1M:
+          type: number
+        outputCostPer1M:
+          type: number
+      required:
+        - id
+        - name
+        - provider
+        - description
+        - inputCostPer1M
+        - outputCostPer1M

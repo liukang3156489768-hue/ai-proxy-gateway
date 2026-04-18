@@ -13,7 +13,16 @@ import type {
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { HealthStatus } from "./api.schemas";
+import type {
+  GetStatsRequestsParams,
+  HealthStatus,
+  ModelUsageStat,
+  ProviderUsageStat,
+  StatsRequestsResponse,
+  StatsSummary,
+  SupportedModel,
+  TimeSeriesStat,
+} from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
 import type { ErrorType } from "../custom-fetch";
@@ -92,6 +101,479 @@ export function useHealthCheck<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getHealthCheckQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get usage summary
+ */
+export const getGetStatsSummaryUrl = () => {
+  return `/api/stats/summary`;
+};
+
+export const getStatsSummary = async (
+  options?: RequestInit,
+): Promise<StatsSummary> => {
+  return customFetch<StatsSummary>(getGetStatsSummaryUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetStatsSummaryQueryKey = () => {
+  return [`/api/stats/summary`] as const;
+};
+
+export const getGetStatsSummaryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStatsSummary>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getStatsSummary>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetStatsSummaryQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getStatsSummary>>> = ({
+    signal,
+  }) => getStatsSummary({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStatsSummary>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStatsSummaryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStatsSummary>>
+>;
+export type GetStatsSummaryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get usage summary
+ */
+
+export function useGetStatsSummary<
+  TData = Awaited<ReturnType<typeof getStatsSummary>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getStatsSummary>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStatsSummaryQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get recent requests
+ */
+export const getGetStatsRequestsUrl = (params?: GetStatsRequestsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/stats/requests?${stringifiedParams}`
+    : `/api/stats/requests`;
+};
+
+export const getStatsRequests = async (
+  params?: GetStatsRequestsParams,
+  options?: RequestInit,
+): Promise<StatsRequestsResponse> => {
+  return customFetch<StatsRequestsResponse>(getGetStatsRequestsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetStatsRequestsQueryKey = (
+  params?: GetStatsRequestsParams,
+) => {
+  return [`/api/stats/requests`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetStatsRequestsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStatsRequests>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetStatsRequestsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStatsRequests>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStatsRequestsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStatsRequests>>
+  > = ({ signal }) => getStatsRequests(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStatsRequests>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStatsRequestsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStatsRequests>>
+>;
+export type GetStatsRequestsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get recent requests
+ */
+
+export function useGetStatsRequests<
+  TData = Awaited<ReturnType<typeof getStatsRequests>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetStatsRequestsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStatsRequests>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStatsRequestsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get usage grouped by model
+ */
+export const getGetStatsUsageByModelUrl = () => {
+  return `/api/stats/usage-by-model`;
+};
+
+export const getStatsUsageByModel = async (
+  options?: RequestInit,
+): Promise<ModelUsageStat[]> => {
+  return customFetch<ModelUsageStat[]>(getGetStatsUsageByModelUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetStatsUsageByModelQueryKey = () => {
+  return [`/api/stats/usage-by-model`] as const;
+};
+
+export const getGetStatsUsageByModelQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStatsUsageByModel>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getStatsUsageByModel>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetStatsUsageByModelQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStatsUsageByModel>>
+  > = ({ signal }) => getStatsUsageByModel({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStatsUsageByModel>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStatsUsageByModelQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStatsUsageByModel>>
+>;
+export type GetStatsUsageByModelQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get usage grouped by model
+ */
+
+export function useGetStatsUsageByModel<
+  TData = Awaited<ReturnType<typeof getStatsUsageByModel>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getStatsUsageByModel>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStatsUsageByModelQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get usage grouped by provider
+ */
+export const getGetStatsUsageByProviderUrl = () => {
+  return `/api/stats/usage-by-provider`;
+};
+
+export const getStatsUsageByProvider = async (
+  options?: RequestInit,
+): Promise<ProviderUsageStat[]> => {
+  return customFetch<ProviderUsageStat[]>(getGetStatsUsageByProviderUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetStatsUsageByProviderQueryKey = () => {
+  return [`/api/stats/usage-by-provider`] as const;
+};
+
+export const getGetStatsUsageByProviderQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStatsUsageByProvider>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getStatsUsageByProvider>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStatsUsageByProviderQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStatsUsageByProvider>>
+  > = ({ signal }) => getStatsUsageByProvider({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStatsUsageByProvider>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStatsUsageByProviderQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStatsUsageByProvider>>
+>;
+export type GetStatsUsageByProviderQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get usage grouped by provider
+ */
+
+export function useGetStatsUsageByProvider<
+  TData = Awaited<ReturnType<typeof getStatsUsageByProvider>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getStatsUsageByProvider>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStatsUsageByProviderQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get usage over time (hourly for last 24h)
+ */
+export const getGetStatsUsageOverTimeUrl = () => {
+  return `/api/stats/usage-over-time`;
+};
+
+export const getStatsUsageOverTime = async (
+  options?: RequestInit,
+): Promise<TimeSeriesStat[]> => {
+  return customFetch<TimeSeriesStat[]>(getGetStatsUsageOverTimeUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetStatsUsageOverTimeQueryKey = () => {
+  return [`/api/stats/usage-over-time`] as const;
+};
+
+export const getGetStatsUsageOverTimeQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStatsUsageOverTime>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getStatsUsageOverTime>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetStatsUsageOverTimeQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStatsUsageOverTime>>
+  > = ({ signal }) => getStatsUsageOverTime({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStatsUsageOverTime>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStatsUsageOverTimeQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStatsUsageOverTime>>
+>;
+export type GetStatsUsageOverTimeQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get usage over time (hourly for last 24h)
+ */
+
+export function useGetStatsUsageOverTime<
+  TData = Awaited<ReturnType<typeof getStatsUsageOverTime>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getStatsUsageOverTime>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStatsUsageOverTimeQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get list of supported models
+ */
+export const getGetSupportedModelsUrl = () => {
+  return `/api/stats/models`;
+};
+
+export const getSupportedModels = async (
+  options?: RequestInit,
+): Promise<SupportedModel[]> => {
+  return customFetch<SupportedModel[]>(getGetSupportedModelsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSupportedModelsQueryKey = () => {
+  return [`/api/stats/models`] as const;
+};
+
+export const getGetSupportedModelsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSupportedModels>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSupportedModels>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetSupportedModelsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getSupportedModels>>
+  > = ({ signal }) => getSupportedModels({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSupportedModels>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSupportedModelsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSupportedModels>>
+>;
+export type GetSupportedModelsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get list of supported models
+ */
+
+export function useGetSupportedModels<
+  TData = Awaited<ReturnType<typeof getSupportedModels>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSupportedModels>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSupportedModelsQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

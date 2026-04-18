@@ -14,3 +14,115 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * @summary Get usage summary
+ */
+export const GetStatsSummaryResponse = zod.object({
+  totalRequests: zod.number(),
+  totalTokens: zod.number(),
+  totalInputTokens: zod.number(),
+  totalOutputTokens: zod.number(),
+  totalCostUsd: zod.number(),
+  avgLatencyMs: zod.number(),
+  successRate: zod.number(),
+  successCount: zod.number(),
+  failureCount: zod.number(),
+  streamRequests: zod.number(),
+  requestsLast24h: zod.number(),
+  tokensLast24h: zod.number(),
+  costLast24h: zod.number(),
+});
+
+/**
+ * @summary Get recent requests
+ */
+export const getStatsRequestsQueryLimitDefault = 50;
+export const getStatsRequestsQueryOffsetDefault = 0;
+
+export const GetStatsRequestsQueryParams = zod.object({
+  limit: zod.coerce.number().default(getStatsRequestsQueryLimitDefault),
+  offset: zod.coerce.number().default(getStatsRequestsQueryOffsetDefault),
+});
+
+export const GetStatsRequestsResponse = zod.object({
+  requests: zod.array(
+    zod.object({
+      id: zod.number(),
+      createdAt: zod.string(),
+      clientKey: zod.string(),
+      provider: zod.string(),
+      model: zod.string(),
+      promptTokens: zod.number().nullish(),
+      completionTokens: zod.number().nullish(),
+      totalTokens: zod.number().nullish(),
+      latencyMs: zod.number().nullish(),
+      costUsd: zod.number().nullish(),
+      status: zod.number(),
+      isStream: zod.boolean().nullish(),
+      requestPath: zod.string(),
+      errorMessage: zod.string().nullish(),
+    }),
+  ),
+  total: zod.number(),
+});
+
+/**
+ * @summary Get usage grouped by model
+ */
+export const GetStatsUsageByModelResponseItem = zod.object({
+  model: zod.string(),
+  provider: zod.string(),
+  requestCount: zod.number(),
+  totalTokens: zod.number(),
+  totalCostUsd: zod.number(),
+  avgLatencyMs: zod.number(),
+});
+export const GetStatsUsageByModelResponse = zod.array(
+  GetStatsUsageByModelResponseItem,
+);
+
+/**
+ * @summary Get usage grouped by provider
+ */
+export const GetStatsUsageByProviderResponseItem = zod.object({
+  provider: zod.string(),
+  requestCount: zod.number(),
+  streamCount: zod.number(),
+  errorCount: zod.number(),
+  inputTokens: zod.number(),
+  outputTokens: zod.number(),
+  totalCostUsd: zod.number(),
+  avgLatencyMs: zod.number(),
+});
+export const GetStatsUsageByProviderResponse = zod.array(
+  GetStatsUsageByProviderResponseItem,
+);
+
+/**
+ * @summary Get usage over time (hourly for last 24h)
+ */
+export const GetStatsUsageOverTimeResponseItem = zod.object({
+  hour: zod.string(),
+  requestCount: zod.number(),
+  totalTokens: zod.number(),
+  totalCostUsd: zod.number(),
+});
+export const GetStatsUsageOverTimeResponse = zod.array(
+  GetStatsUsageOverTimeResponseItem,
+);
+
+/**
+ * @summary Get list of supported models
+ */
+export const GetSupportedModelsResponseItem = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  provider: zod.string(),
+  description: zod.string(),
+  inputCostPer1M: zod.number(),
+  outputCostPer1M: zod.number(),
+});
+export const GetSupportedModelsResponse = zod.array(
+  GetSupportedModelsResponseItem,
+);

@@ -6,4 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./getStatsRequestsParams";
 export * from "./healthStatus";
+export * from "./modelUsageStat";
+export * from "./providerUsageStat";
+export * from "./statsRequest";
+export * from "./statsRequestsResponse";
+export * from "./statsSummary";
+export * from "./supportedModel";
+export * from "./timeSeriesStat";
