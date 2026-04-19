@@ -1,8 +1,9 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
-import router from "./routes";
-import { logger } from "./lib/logger";
+import router from "./routes/index.js";
+import clusterRouter, { rawBodyCapture } from "./routes/cluster.js";
+import { logger } from "./lib/logger.js";
 
 const app: Express = express();
 
@@ -26,8 +27,6 @@ app.use(
   }),
 );
 app.use(cors());
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // Normalize URL: collapse multiple slashes (e.g. "/v1//chat/completions" → "/v1/chat/completions")
 // This handles clients that configure base URL with trailing slash like "https://host/v1/"
@@ -38,6 +37,15 @@ app.use((req, _res, next) => {
   }
   next();
 });
+
+// ── Cluster bare-passthrough endpoints ──────────────────────────────────────
+// MUST be mounted BEFORE express.json() so rawBodyCapture can intercept
+// the raw stream (including non-JSON payloads like Gemini file uploads).
+app.use("/cluster", rawBodyCapture, clusterRouter);
+
+// ── Standard body parsers (used by /api and /v1 routes) ─────────────────────
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 app.use("/api", router);
 // Also mount at /v1 for standard OpenAI-compatible base URL

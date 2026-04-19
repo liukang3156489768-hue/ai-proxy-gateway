@@ -23,6 +23,13 @@ import { db, apiUsageLogs } from "@workspace/db";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { ai } from "@workspace/integrations-gemini-ai";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
+import OpenAI from "openai";
+
+// OpenRouter client — OpenAI-compatible SDK pointed at the OpenRouter integration endpoint
+const openrouter = new OpenAI({
+  baseURL: process.env["AI_INTEGRATIONS_OPENROUTER_BASE_URL"] ?? "https://openrouter.ai/api/v1",
+  apiKey: process.env["AI_INTEGRATIONS_OPENROUTER_API_KEY"] ?? "",
+});
 import type {
   MessageParam,
   TextBlockParam,
@@ -372,6 +379,8 @@ router.post(["/proxy/v1/chat/completions", "/chat/completions"], proxyAuth, asyn
       await handleOpenAI({ req, res: res as ProxyRes, body, model, stream });
     } else if (provider === "gemini") {
       await handleGemini({ req, res: res as ProxyRes, body, model, stream, thinking });
+    } else if (provider === "openrouter") {
+      await handleOpenRouter({ req, res: res as ProxyRes, body, model, stream });
     } else {
       await handleAnthropic({ req, res: res as ProxyRes, body, model, stream, thinking });
     }
@@ -584,6 +593,58 @@ async function handleOpenAI({ req: _req, res, body, model, stream }: {
     res.end();
   } else {
     const completion = await openai.chat.completions.create({ ...baseParams, stream: false });
+    res._proxyUsage = { prompt: completion.usage?.prompt_tokens ?? 0, completion: completion.usage?.completion_tokens ?? 0 };
+    res.json(completion);
+  }
+}
+
+// ── OpenRouter handler ────────────────────────────────────────────────────────
+// Uses the OpenAI-compatible SDK pointed at the OpenRouter integration.
+// The model ID received here carries the "openrouter/" prefix for client
+// disambiguation; we strip it before forwarding to the OpenRouter API.
+
+async function handleOpenRouter({ req: _req, res, body, model, stream }: {
+  req: Request; res: ProxyRes; body: ChatCompletionBody; model: string; stream: boolean;
+}) {
+  // Strip the openrouter/ prefix → "openrouter/anthropic/claude-opus-4-5" → "anthropic/claude-opus-4-5"
+  const upstreamModel = model.replace(/^openrouter\//, "");
+
+  const messages = body.messages.map((m): ChatCompletionMessageParam => {
+    if (m.role === "tool") {
+      return { role: "tool", tool_call_id: m.tool_call_id ?? "", content: extractText(m.content) };
+    }
+    if (m.role === "assistant" && m.tool_calls) {
+      return { role: "assistant", content: m.content as string | null, tool_calls: m.tool_calls as ChatCompletionMessageParam["tool_calls"] };
+    }
+    return { role: m.role as "system" | "user" | "assistant", content: m.content as ChatCompletionMessageParam["content"] };
+  });
+
+  const baseParams: Parameters<typeof openrouter.chat.completions.create>[0] = {
+    model: upstreamModel,
+    messages,
+    ...(body.max_completion_tokens ? { max_completion_tokens: body.max_completion_tokens } : {}),
+    ...(body.max_tokens ? { max_tokens: body.max_tokens } : {}),
+    ...(body.temperature !== undefined ? { temperature: body.temperature } : {}),
+    ...(body.tools ? { tools: body.tools as Parameters<typeof openrouter.chat.completions.create>[0]["tools"] } : {}),
+    ...(body.tool_choice ? { tool_choice: body.tool_choice as Parameters<typeof openrouter.chat.completions.create>[0]["tool_choice"] } : {}),
+  };
+
+  if (stream) {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("X-Accel-Buffering", "no");
+
+    const streamResp = await openrouter.chat.completions.create({ ...baseParams, stream: true });
+    let pt = 0; let ct = 0;
+    for await (const chunk of streamResp) {
+      if (chunk.usage) { pt = chunk.usage.prompt_tokens ?? 0; ct = chunk.usage.completion_tokens ?? 0; }
+      res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+    }
+    res._proxyUsage = { prompt: pt, completion: ct };
+    res.write("data: [DONE]\n\n");
+    res.end();
+  } else {
+    const completion = await openrouter.chat.completions.create({ ...baseParams, stream: false });
     res._proxyUsage = { prompt: completion.usage?.prompt_tokens ?? 0, completion: completion.usage?.completion_tokens ?? 0 };
     res.json(completion);
   }

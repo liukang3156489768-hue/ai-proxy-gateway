@@ -1,4 +1,4 @@
-export type Provider = "openai" | "gemini" | "anthropic";
+export type Provider = "openai" | "gemini" | "anthropic" | "openrouter";
 
 export interface ProviderPricing {
   inputPer1M: number;
@@ -42,6 +42,22 @@ const anthropicPricing: Record<string, ProviderPricing> = {
   "claude-haiku-4-5": { inputPer1M: 0.8, outputPer1M: 4 },
 };
 
+// OpenRouter pricing for Claude models (via openrouter/anthropic/... model IDs)
+// These are OpenRouter's pass-through prices (same as Anthropic direct + small markup)
+const openrouterClaudePricing: Record<string, ProviderPricing> = {
+  // Latest generation
+  "openrouter/anthropic/claude-opus-4-5":       { inputPer1M: 15,   outputPer1M: 75 },
+  "openrouter/anthropic/claude-sonnet-4-5":     { inputPer1M: 3,    outputPer1M: 15 },
+  "openrouter/anthropic/claude-haiku-4-5":      { inputPer1M: 0.8,  outputPer1M: 4 },
+  // claude-3.5 series — widely available on OpenRouter
+  "openrouter/anthropic/claude-3-5-sonnet":     { inputPer1M: 3,    outputPer1M: 15 },
+  "openrouter/anthropic/claude-3-5-haiku":      { inputPer1M: 0.8,  outputPer1M: 4 },
+  // claude-3 series
+  "openrouter/anthropic/claude-3-opus":         { inputPer1M: 15,   outputPer1M: 75 },
+  "openrouter/anthropic/claude-3-sonnet":       { inputPer1M: 3,    outputPer1M: 15 },
+  "openrouter/anthropic/claude-3-haiku":        { inputPer1M: 0.25, outputPer1M: 1.25 },
+};
+
 // Models that support extended thinking mode
 const thinkingCapableGemini = ["gemini-2.5-pro", "gemini-2.5-flash"];
 const thinkingCapableAnthropic = Object.keys(anthropicPricing);
@@ -49,6 +65,8 @@ const thinkingCapableAnthropic = Object.keys(anthropicPricing);
 export function detectProvider(model: string): Provider {
   // Strip thinking suffix before provider detection
   const base = model.replace(/-thinking-visible$/, "").replace(/-thinking$/, "");
+  // OpenRouter-routed models carry an explicit openrouter/ prefix
+  if (base.startsWith("openrouter/")) return "openrouter";
   if (base.startsWith("gemini-")) return "gemini";
   if (base.startsWith("claude-")) return "anthropic";
   return "openai";
@@ -70,6 +88,8 @@ export function estimateCost(
     pricing = openaiPricing[baseModel] ?? openaiPricing[model] ?? { inputPer1M: 2, outputPer1M: 8 };
   } else if (provider === "gemini") {
     pricing = geminiPricing[baseModel] ?? geminiPricing[model] ?? { inputPer1M: 1, outputPer1M: 4 };
+  } else if (provider === "openrouter") {
+    pricing = openrouterClaudePricing[baseModel] ?? openrouterClaudePricing[model] ?? { inputPer1M: 3, outputPer1M: 15 };
   } else {
     pricing = anthropicPricing[baseModel] ?? anthropicPricing[model] ?? { inputPer1M: 5, outputPer1M: 25 };
   }
@@ -147,12 +167,12 @@ export const SUPPORTED_MODELS = [
     )
   ),
 
-  // Anthropic models (base)
+  // Anthropic models (base) — direct channel
   ...Object.keys(anthropicPricing).map((id) => ({
     id,
     name: id,
     provider: "anthropic",
-    description: "Anthropic Claude model via Replit AI Integrations",
+    description: "Anthropic Claude model via Replit AI Integrations（直连渠道）",
     inputCostPer1M: anthropicPricing[id]!.inputPer1M,
     outputCostPer1M: anthropicPricing[id]!.outputPer1M,
   })),
@@ -164,7 +184,18 @@ export const SUPPORTED_MODELS = [
       "anthropic",
       anthropicPricing[id]!.inputPer1M,
       anthropicPricing[id]!.outputPer1M,
-      "Anthropic Claude model via Replit AI Integrations"
+      "Anthropic Claude model via Replit AI Integrations（直连渠道）"
     )
   ),
+
+  // OpenRouter Claude models — openrouter/ prefix distinguishes from direct Anthropic channel
+  ...Object.keys(openrouterClaudePricing).map((id) => ({
+    id,
+    name: id,
+    provider: "openrouter",
+    description: "Anthropic Claude model via OpenRouter 渠道（模型 ID 含 openrouter/ 前缀）",
+    inputCostPer1M: openrouterClaudePricing[id]!.inputPer1M,
+    outputCostPer1M: openrouterClaudePricing[id]!.outputPer1M,
+    tags: ["openrouter"],
+  })),
 ];

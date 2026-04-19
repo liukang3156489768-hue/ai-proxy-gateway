@@ -1,8 +1,8 @@
 kind = "web"
 previewPath = "/"
-title = "API 管理面板"
+title = "AI Proxy Gateway Dashboard"
 version = "1.0.0"
-id = "dashboard-artifact"
+id = "artifacts/dashboard"
 router = "path"
 
 [[integratedSkills]]
@@ -11,16 +11,16 @@ version = "1.0.0"
 
 [[services]]
 name = "web"
-paths = ["/"]
+paths = [ "/" ]
 localPort = 23183
 
 [services.development]
 run = "pnpm --filter @workspace/dashboard run dev"
 
 [services.production]
-serve = "static"
-build = ["pnpm", "--filter", "@workspace/dashboard", "run", "build"]
+build = [ "pnpm", "--filter", "@workspace/dashboard", "run", "build" ]
 publicDir = "artifacts/dashboard/dist/public"
+serve = "static"
 
 [[services.production.rewrites]]
 from = "/*"

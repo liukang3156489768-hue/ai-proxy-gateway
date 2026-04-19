@@ -17,6 +17,9 @@ export const apiUsageLogs = pgTable("api_usage_logs", {
   isStream: boolean("is_stream").default(false),
   requestPath: text("request_path").notNull(),
   errorMessage: text("error_message"),
+  // Cluster ledger fields
+  kind: text("kind").default("proxy").notNull(),
+  peerNodeId: text("peer_node_id"),
 });
 
 export const insertApiUsageLogSchema = createInsertSchema(apiUsageLogs).omit({ id: true, createdAt: true });
